@@ -4,7 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import {
+  ILike,
+  OptimisticLockVersionMismatchError,
+  Repository,
+} from 'typeorm';
 import { Product } from '../database/entities/product.entity';
 import { OrderItem } from '../database/entities/order-item.entity';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -135,9 +139,11 @@ export class ProductsService {
   }
 
   /**
-   * Saves a product and maps PostgreSQL's unique-violation (23505) to a
-   * friendly 409, covering the small race window between the SKU pre-check
-   * and the actual insert/update.
+   * Saves a product and maps the two expected write races to a friendly 409:
+   *  - a concurrent SKU unique-violation (Postgres 23505) between the pre-check
+   *    and the actual insert/update;
+   *  - an optimistic-lock mismatch when another writer updated the product
+   *    (the client should refresh and retry).
    */
   private async saveWithUniqueGuard(product: Product): Promise<Product> {
     try {
@@ -150,6 +156,11 @@ export class ProductsService {
       ) {
         throw new ConflictException(
           `A product with SKU "${product.sku}" already exists`,
+        );
+      }
+      if (error instanceof OptimisticLockVersionMismatchError) {
+        throw new ConflictException(
+          'This product was modified by someone else. Refresh and try again.',
         );
       }
       throw error;

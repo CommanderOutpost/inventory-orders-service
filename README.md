@@ -178,7 +178,7 @@ cd frontend && npm test
 cd backend && npm run lint
 ```
 
-The e2e suite covers the **core order flow**: registration/login, RBAC, stock decrement on order placement, oversell rejection, order visibility scoping, the status state machine, restock-on-cancel, and exactly-once restock under concurrent cancels.
+The e2e suite covers the **core order flow**: registration/login, RBAC, stock decrement on order placement, oversell rejection, order visibility scoping, the status state machine, restock-on-cancel, exactly-once restock under concurrent cancels, and **no overselling under concurrent order placement** (row locks serialise decrements).
 
 ## Assumptions & trade-offs
 

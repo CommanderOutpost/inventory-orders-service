@@ -14,6 +14,19 @@ export interface AppConfig {
   seedAdminPassword: string;
 }
 
+const JWT_SECRET = Joi.string()
+  .min(16)
+  .required()
+  .custom((value: string, helpers) => {
+    if (/change-me|replace-me|changeme/i.test(value)) {
+      return helpers.error('any.invalid');
+    }
+    return value;
+  })
+  .messages({
+    'any.invalid': 'JWT_SECRET must not be a placeholder value',
+  });
+
 export const configValidationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'test', 'production')
@@ -22,7 +35,7 @@ export const configValidationSchema = Joi.object({
   DATABASE_URL: Joi.string().uri({ scheme: ['postgres', 'postgresql'] }).required(),
   DB_SYNCHRONIZE: Joi.boolean().default(false),
   DB_LOGGING: Joi.boolean().default(false),
-  JWT_SECRET: Joi.string().min(16).required(),
+  JWT_SECRET: JWT_SECRET,
   JWT_EXPIRES_IN: Joi.string().default('1d'),
   CORS_ORIGINS: Joi.string().default('http://localhost:5173'),
   REPORTING_SERVICE_URL: Joi.string()

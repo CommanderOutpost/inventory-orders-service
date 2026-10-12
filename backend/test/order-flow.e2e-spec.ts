@@ -361,6 +361,38 @@ describe('Inventory & Orders API (e2e)', () => {
       expect(orderAfter.body.status).toBe(OrderStatus.CANCELLED);
     });
 
+    it('never oversells under concurrent order placement', async () => {
+      const adminToken = await loginAdmin();
+      const product = await createProduct(adminToken, { stock: 10 });
+      const customerRes = await register('race2');
+      const customerToken = customerRes.body.accessToken as string;
+
+      // Four concurrent orders each demanding 4 units (16 needed, 10 in stock).
+      const responses = await Promise.all(
+        Array.from({ length: 4 }, () =>
+          http
+            .post('/api/v1/orders')
+            .set(authHeader(customerToken))
+            .send({ items: [{ productId: product.id, quantity: 4 }] }),
+        ),
+      );
+
+      const successes = responses.filter((r) => r.status === 201);
+      const failures = responses.filter((r) => r.status === 400);
+
+      // Row locks serialize the decrements: 10 / 4 → exactly 2 succeed.
+      expect(successes).toHaveLength(2);
+      expect(failures).toHaveLength(2);
+      expect(failures.every((r) => r.body.message.includes('Insufficient stock'))).toBe(
+        true,
+      );
+
+      const productAfter = await http
+        .get(`/api/v1/products/${product.id}`)
+        .expect(200);
+      expect(productAfter.body.stock).toBe(2);
+    });
+
     it('restores stock exactly once under concurrent cancels', async () => {
       const adminToken = await loginAdmin();
       const product = await createProduct(adminToken, { stock: 10 });
