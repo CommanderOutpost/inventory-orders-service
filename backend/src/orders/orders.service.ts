@@ -217,12 +217,17 @@ export class OrdersService {
    * Returns stock to a product. Uses a locked read + save so the `version`
    * column is honoured: a concurrent admin edit with a stale version fails
    * its optimizer check instead of silently overwriting the restored stock.
+   * Locks are acquired in id-sorted order (same as `create`) to keep the
+   * codebase's deadlock-avoidance guarantee across all product lock sites.
    */
   private async restockItems(
     manager: EntityManager,
     order: Order,
   ): Promise<void> {
-    for (const item of order.items) {
+    const sortedItems = [...order.items].sort((a, b) =>
+      a.productId.localeCompare(b.productId),
+    );
+    for (const item of sortedItems) {
       const product = await manager.findOne(Product, {
         where: { id: item.productId },
         lock: { mode: 'pessimistic_write' },

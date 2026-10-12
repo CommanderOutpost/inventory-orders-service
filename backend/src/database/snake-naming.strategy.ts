@@ -78,7 +78,7 @@ export class SnakeNamingStrategy
     tableOrName: Table | string,
     columnNames: string[],
     referencedTablePath?: string,
-    referencedColumnNames?: string[],
+    _referencedColumnNames?: string[],
   ): string {
     const table = this.extractTableName(tableOrName);
     const referencedTable = referencedTablePath

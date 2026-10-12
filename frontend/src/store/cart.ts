@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import type { Product } from '../types';
 
 export interface CartLine {
@@ -47,7 +47,10 @@ export const useCartStore = create<CartState>()(
         })),
       clear: () => set({ lines: [] }),
     }),
-    { name: 'atlas-cart' },
+    {
+      name: 'atlas-cart',
+      storage: createJSONStorage(() => localStorage),
+    },
   ),
 );
 

@@ -1,7 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import request from 'supertest';
-import { DataSource } from 'typeorm';
 import { UsersService } from '../src/users/users.service';
 import { UserRole } from '../src/users/user-role.enum';
 import { OrderStatus } from '../src/orders/order-status.enum';
@@ -14,7 +13,6 @@ import {
 describe('Inventory & Orders API (e2e)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
-  let dataSource: DataSource;
   let usersService: UsersService;
 
   const adminEmail = 'admin@test.com';
@@ -23,7 +21,6 @@ describe('Inventory & Orders API (e2e)', () => {
   beforeAll(async () => {
     app = await createTestApp();
     http = request(app.getHttpServer());
-    dataSource = app.get(DataSource);
     usersService = app.get(UsersService);
 
     const passwordHash = await bcrypt.hash(adminPassword, 4);

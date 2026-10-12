@@ -2,7 +2,6 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EntityManager, Repository } from 'typeorm';
 import { OrdersService } from './orders.service';
 import { Order } from '../database/entities/order.entity';
-import { OrderItem } from '../database/entities/order-item.entity';
 import { Product } from '../database/entities/product.entity';
 import { AuthUser } from '../auth/auth.types';
 import { UserRole } from '../users/user-role.enum';

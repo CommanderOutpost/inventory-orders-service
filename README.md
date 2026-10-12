@@ -163,7 +163,7 @@ Prices use `numeric` columns and are exposed as JS numbers via a value transform
 ## Tests
 
 ```bash
-# Backend unit tests (auth, products, orders)
+# Backend unit tests (auth, products, users, orders)
 cd backend && npm test
 
 # Backend e2e tests against a real Postgres (creates/uses `inventory_test`)
@@ -172,9 +172,13 @@ cd backend && npm run test:e2e
 
 # Go tests (unit + optional integration when TEST_DATABASE_URL is set)
 cd services/reporting && go test ./...
+
+# Frontend tests (cart store invariants, formatters) + lint/type checks
+cd frontend && npm test
+cd backend && npm run lint
 ```
 
-The e2e suite covers the **core order flow**: registration/login, RBAC, stock decrement on order placement, oversell rejection, order visibility scoping, the status state machine and restock-on-cancel.
+The e2e suite covers the **core order flow**: registration/login, RBAC, stock decrement on order placement, oversell rejection, order visibility scoping, the status state machine, restock-on-cancel, and exactly-once restock under concurrent cancels.
 
 ## Assumptions & trade-offs
 
