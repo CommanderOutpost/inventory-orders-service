@@ -15,7 +15,12 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  /**
+   * Excluded from every query by default so the hash can never be leaked via
+   * relations/serialisation. UsersService.findByEmail re-selects it explicitly
+   * for login.
+   */
+  @Column({ select: false })
   passwordHash: string;
 
   @Column()

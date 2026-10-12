@@ -125,8 +125,8 @@ cp frontend/.env.example frontend/.env.local
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgres://localhost:5432/inventory` | Postgres DSN |
-| `JWT_SECRET` | — | **required**, ≥16 chars |
+| `DATABASE_URL` | *(required)* | Postgres DSN, e.g. `postgres://localhost:5432/inventory` |
+| `JWT_SECRET` | *(required)* | ≥16 chars |
 | `JWT_EXPIRES_IN` | `1d` | token lifetime |
 | `CORS_ORIGINS` | `http://localhost:5173` | comma-separated |
 | `REPORTING_SERVICE_URL` | `http://localhost:8080` | Go service base URL |
@@ -141,7 +141,8 @@ Base path `/api/v1`. Errors always return `{ statusCode, message, error, path, t
 | `POST` | `/auth/register` | public |
 | `POST` | `/auth/login` | public |
 | `GET` | `/auth/me` | any authenticated |
-| `GET` | `/products` · `/products/:id` | public |
+| `GET` | `/products` · `/products/:id` | public (active products only) |
+| `GET` | `/products/admin` | admin (includes archived) |
 | `POST`/`PATCH`/`DELETE` | `/products...` | admin |
 | `POST` | `/orders` | customer |
 | `GET` | `/orders` · `/orders/:id` | customer (own) / admin (all) |

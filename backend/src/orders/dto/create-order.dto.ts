@@ -20,7 +20,7 @@ export class CreateOrderItemDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(10_000)
+  @Max(1000)
   quantity: number;
 }
 

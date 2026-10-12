@@ -1,14 +1,13 @@
-import { Type } from 'class-transformer';
-import {
-  IsIn,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 const SORTABLE_FIELDS = ['name', 'price', 'stock', 'createdAt'] as const;
 export type ProductSortField = (typeof SORTABLE_FIELDS)[number];
+
+/** Treats only the literal string "true" as true (mirrors the frontend). */
+const ToBoolean = () =>
+  Transform(({ value }) => value === true || value === 'true');
 
 export class QueryProductsDto extends PaginationDto {
   @IsOptional()
@@ -26,6 +25,6 @@ export class QueryProductsDto extends PaginationDto {
 
   /** When true (admin), archived/inactive products are included. */
   @IsOptional()
-  @Type(() => Boolean)
+  @ToBoolean()
   includeInactive?: boolean = false;
 }

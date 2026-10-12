@@ -105,6 +105,7 @@ export function AdminOrdersPage() {
               <thead>
                 <tr>
                   <th>Order</th>
+                  <th>Customer</th>
                   <th>Placed</th>
                   <th>Items</th>
                   <th>Total</th>
@@ -119,6 +120,15 @@ export function AdminOrdersPage() {
                     <tr key={order.id}>
                       <td>
                         <code>{order.id.slice(0, 8)}</code>
+                      </td>
+                      <td>
+                        {order.user ? (
+                          <span title={order.user.email}>
+                            {order.user.name}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        )}
                       </td>
                       <td>{formatDate(order.createdAt)}</td>
                       <td>

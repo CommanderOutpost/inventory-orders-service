@@ -49,6 +49,8 @@ export interface Order {
   totalAmount: number;
   notes: string | null;
   items: OrderItem[];
+  /** Present on admin responses; the owning customer. */
+  user?: Pick<User, 'id' | 'email' | 'name'>;
   createdAt: string;
   updatedAt: string;
 }

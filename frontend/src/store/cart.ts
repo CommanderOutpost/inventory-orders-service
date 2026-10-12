@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { Product } from '../types';
 
 export interface CartLine {
@@ -14,36 +15,41 @@ interface CartState {
   clear: () => void;
 }
 
-export const useCartStore = create<CartState>((set) => ({
-  lines: [],
-  add: (product, quantity = 1) =>
-    set((state) => {
-      const existing = state.lines.find((l) => l.product.id === product.id);
-      if (existing) {
-        return {
+export const useCartStore = create<CartState>()(
+  persist(
+    (set) => ({
+      lines: [],
+      add: (product, quantity = 1) =>
+        set((state) => {
+          const existing = state.lines.find((l) => l.product.id === product.id);
+          if (existing) {
+            return {
+              lines: state.lines.map((l) =>
+                l.product.id === product.id
+                  ? { ...l, quantity: Math.min(l.quantity + quantity, product.stock) }
+                  : l,
+              ),
+            };
+          }
+          return { lines: [...state.lines, { product, quantity }] };
+        }),
+      setQuantity: (productId, quantity) =>
+        set((state) => ({
           lines: state.lines.map((l) =>
-            l.product.id === product.id
-              ? { ...l, quantity: Math.min(l.quantity + quantity, product.stock) }
+            l.product.id === productId
+              ? { ...l, quantity: Math.max(1, Math.min(quantity, l.product.stock)) }
               : l,
           ),
-        };
-      }
-      return { lines: [...state.lines, { product, quantity }] };
+        })),
+      remove: (productId) =>
+        set((state) => ({
+          lines: state.lines.filter((l) => l.product.id !== productId),
+        })),
+      clear: () => set({ lines: [] }),
     }),
-  setQuantity: (productId, quantity) =>
-    set((state) => ({
-      lines: state.lines.map((l) =>
-        l.product.id === productId
-          ? { ...l, quantity: Math.max(1, Math.min(quantity, l.product.stock)) }
-          : l,
-      ),
-    })),
-  remove: (productId) =>
-    set((state) => ({
-      lines: state.lines.filter((l) => l.product.id !== productId),
-    })),
-  clear: () => set({ lines: [] }),
-}));
+    { name: 'atlas-cart' },
+  ),
+);
 
 export const selectCartCount = (state: CartState): number =>
   state.lines.reduce((sum, l) => sum + l.quantity, 0);

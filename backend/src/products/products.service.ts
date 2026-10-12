@@ -86,7 +86,9 @@ export class ProductsService {
   /**
    * Deletes a product. If it has ever been part of an order it is soft-deleted
    * (archived via `isActive = false`) to preserve order history; otherwise it
-   * is hard deleted.
+   * is hard deleted. If a concurrent order is placed between the reference
+   * check and the delete, the FK violation is caught and the product is
+   * archived instead.
    */
   async remove(id: string): Promise<{ deleted: boolean; archived: boolean }> {
     const product = await this.findOne(id, true);
@@ -101,8 +103,22 @@ export class ProductsService {
       return { deleted: false, archived: true };
     }
 
-    await this.productsRepository.remove(product);
-    return { deleted: true, archived: false };
+    try {
+      await this.productsRepository.remove(product);
+      return { deleted: true, archived: false };
+    } catch (error) {
+      // FK 23503: an order referenced this product in the meantime → archive.
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        (error as { code?: string }).code === '23503'
+      ) {
+        product.isActive = false;
+        await this.productsRepository.save(product);
+        return { deleted: false, archived: true };
+      }
+      throw error;
+    }
   }
 
   private async assertSkuAvailable(

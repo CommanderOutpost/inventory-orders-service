@@ -19,6 +19,9 @@ import { QueryOrdersDto } from './dto/query-orders.dto';
 import { Paginated, paginate } from '../common/dto/pagination.dto';
 
 const ORDER_RELATIONS = { items: { product: true } } as const;
+// Admins also see which customer owns each order. The user's password hash is
+// never included because the column is `select: false`.
+const ADMIN_ORDER_RELATIONS = { ...ORDER_RELATIONS, user: true } as const;
 
 interface PricedItem {
   productId: string;
@@ -113,7 +116,8 @@ export class OrdersService {
 
     const [data, total] = await this.ordersRepository.findAndCount({
       where,
-      relations: ORDER_RELATIONS,
+      relations:
+        user.role === UserRole.ADMIN ? ADMIN_ORDER_RELATIONS : ORDER_RELATIONS,
       order: { createdAt: 'desc' },
       skip: (query.page - 1) * query.limit,
       take: query.limit,
@@ -131,7 +135,8 @@ export class OrdersService {
 
     const order = await this.ordersRepository.findOne({
       where,
-      relations: ORDER_RELATIONS,
+      relations:
+        user.role === UserRole.ADMIN ? ADMIN_ORDER_RELATIONS : ORDER_RELATIONS,
     });
     if (!order) {
       throw new NotFoundException('Order not found');

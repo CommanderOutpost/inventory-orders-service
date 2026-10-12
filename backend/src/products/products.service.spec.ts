@@ -98,6 +98,16 @@ describe('ProductsService', () => {
       );
       expect(result).toEqual(product);
     });
+
+    it('maps a concurrent SKU unique-violation to a 409 Conflict', async () => {
+      productsRepository.findOne.mockResolvedValue(null);
+      productsRepository.create.mockReturnValue(product);
+      productsRepository.save.mockRejectedValue({ code: '23505' } as never);
+
+      await expect(
+        service.create({ name: 'Coffee', sku: 'COF-2', price: 10, stock: 5 }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
   });
 
   describe('remove', () => {

@@ -46,7 +46,14 @@ export class ReportsService {
           `Reporting service responded with status ${response.status}`,
         );
       }
-      return await response.json();
+
+      try {
+        return await response.json();
+      } catch {
+        throw new BadGatewayException(
+          'Reporting service returned an invalid response',
+        );
+      }
     } catch (error) {
       if (
         error instanceof BadGatewayException ||

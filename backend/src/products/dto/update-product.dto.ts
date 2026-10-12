@@ -38,6 +38,7 @@ export class UpdateProductDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01, { message: 'Price must be greater than 0' })
+  @Max(9_999_999.99, { message: 'Price is too large' })
   price?: number;
 
   @ValidateIf((o) => o.stock !== undefined)

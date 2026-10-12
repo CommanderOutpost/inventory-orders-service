@@ -35,3 +35,6 @@ coverage/
 
 # TypeORM
 **/migrations/*.js
+
+# TypeScript incremental build info
+*.tsbuildinfo
