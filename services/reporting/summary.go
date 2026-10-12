@@ -1,0 +1,187 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"net/http"
+	"time"
+)
+
+const queryTimeout = 5 * time.Second
+
+type OrderStore struct {
+	db *sql.DB
+}
+
+type StatusCount struct {
+	Status string `json:"status"`
+	Count  int64  `json:"count"`
+}
+
+type TopProduct struct {
+	ProductID    string  `json:"productId"`
+	Name         string  `json:"name"`
+	SKU          string  `json:"sku"`
+	QuantitySold int64   `json:"quantitySold"`
+	Revenue      float64 `json:"revenue"`
+}
+
+type OrderSummary struct {
+	GeneratedAt       time.Time     `json:"generatedAt"`
+	From              string        `json:"from"`
+	To                string        `json:"to"`
+	TotalOrders       int64         `json:"totalOrders"`
+	TotalRevenue      float64       `json:"totalRevenue"`
+	AverageOrderValue float64       `json:"averageOrderValue"`
+	OrdersByStatus    []StatusCount `json:"ordersByStatus"`
+	TopProducts       []TopProduct  `json:"topProducts"`
+}
+
+// GetSummary aggregates order data for the requested period.
+// Cancelled orders are excluded from revenue and sales metrics but are
+// still broken down in OrdersByStatus.
+func (s *OrderStore) GetSummary(ctx context.Context, from, to string) (OrderSummary, error) {
+	var summary OrderSummary
+
+	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
+	defer cancel()
+
+	// Overall figures.
+	row := s.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE status <> 'cancelled') AS total_orders,
+			COALESCE(SUM(total_amount) FILTER (WHERE status <> 'cancelled'), 0) AS total_revenue,
+			COALESCE(AVG(total_amount) FILTER (WHERE status <> 'cancelled'), 0) AS average_order_value
+		FROM orders
+		WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
+		  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)`,
+		nullableDate(from), nullableDate(to),
+	)
+	if err := row.Scan(&summary.TotalOrders, &summary.TotalRevenue, &summary.AverageOrderValue); err != nil {
+		return summary, err
+	}
+
+	// Status breakdown (all orders, including cancelled).
+	statusRows, err := s.db.QueryContext(ctx, `
+		SELECT status, COUNT(*) FROM orders
+		WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
+		  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)
+		GROUP BY status ORDER BY status`,
+		nullableDate(from), nullableDate(to),
+	)
+	if err != nil {
+		return summary, err
+	}
+	defer statusRows.Close()
+
+	for statusRows.Next() {
+		var sc StatusCount
+		if err := statusRows.Scan(&sc.Status, &sc.Count); err != nil {
+			return summary, err
+		}
+		summary.OrdersByStatus = append(summary.OrdersByStatus, sc)
+	}
+	if err := statusRows.Err(); err != nil {
+		return summary, err
+	}
+
+	// Top selling products by revenue.
+	productRows, err := s.db.QueryContext(ctx, `
+		SELECT p.id, p.name, p.sku,
+		       SUM(oi.quantity)::bigint AS quantity_sold,
+		       SUM(oi.line_total)::float8 AS revenue
+		FROM order_items oi
+		JOIN orders o  ON o.id = oi.order_id
+		JOIN products p ON p.id = oi.product_id
+		WHERE o.status <> 'cancelled'
+		  AND ($1::timestamptz IS NULL OR o.created_at >= $1::timestamptz)
+		  AND ($2::timestamptz IS NULL OR o.created_at <= $2::timestamptz)
+		GROUP BY p.id, p.name, p.sku
+		ORDER BY revenue DESC
+		LIMIT 10`,
+		nullableDate(from), nullableDate(to),
+	)
+	if err != nil {
+		return summary, err
+	}
+	defer productRows.Close()
+
+	for productRows.Next() {
+		var tp TopProduct
+		if err := productRows.Scan(&tp.ProductID, &tp.Name, &tp.SKU, &tp.QuantitySold, &tp.Revenue); err != nil {
+			return summary, err
+		}
+		summary.TopProducts = append(summary.TopProducts, tp)
+	}
+	if err := productRows.Err(); err != nil {
+		return summary, err
+	}
+
+	summary.GeneratedAt = time.Now().UTC()
+	summary.From = from
+	summary.To = to
+
+	return summary, nil
+}
+
+// nullableDate converts an empty string to nil so SQL can use the
+// `IS NULL` branch (i.e. no upper/lower bound).
+func nullableDate(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+type SummaryHandler struct {
+	store *OrderStore
+}
+
+func (h *SummaryHandler) health(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := h.store.db.PingContext(ctx); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"status": "degraded",
+			"db":     "down",
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status": "ok",
+		"db":     "up",
+	})
+}
+
+func (h *SummaryHandler) orderSummary(w http.ResponseWriter, r *http.Request) {
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+
+	if (from != "" && !isRFC3339(from)) || (to != "" && !isRFC3339(to)) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "from and to must be RFC 3339 timestamps",
+		})
+		return
+	}
+
+	summary, err := h.store.GetSummary(r.Context(), from, to)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			writeJSON(w, http.StatusGatewayTimeout, map[string]string{"error": "query timed out"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "failed to build order summary",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, summary)
+}
+
+func isRFC3339(value string) bool {
+	_, err := time.Parse(time.RFC3339, value)
+	return err == nil
+}

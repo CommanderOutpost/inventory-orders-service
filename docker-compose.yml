@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: inventory
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inventory"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  reporting:
+    build: ./services/reporting
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://postgres:postgres@db:5432/inventory
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build: ./backend
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgres://postgres:postgres@db:5432/inventory
+      DB_SYNCHRONIZE: "false"
+      DB_LOGGING: "false"
+      JWT_SECRET: ${JWT_SECRET:-docker-compose-change-me-0123456789abcdef}
+      JWT_EXPIRES_IN: 1d
+      CORS_ORIGINS: http://localhost:5173,http://localhost
+      REPORTING_SERVICE_URL: http://reporting:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      reporting:
+        condition: service_started
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  db-data:

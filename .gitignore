@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+**/dist/
+**/build/
+
+# Go build artifacts
+services/reporting/reporting-service
+*.exe
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Coverage / test artifacts
+coverage/
+.nyc_output/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# TypeORM
+**/migrations/*.js
