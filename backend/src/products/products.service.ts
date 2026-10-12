@@ -104,7 +104,7 @@ export class ProductsService {
 
     if (referenced > 0) {
       product.isActive = false;
-      await this.productsRepository.save(product);
+      await this.saveWithVersionGuard(product);
       return { deleted: false, archived: true };
     }
 
@@ -119,7 +119,7 @@ export class ProductsService {
         (error as { code?: string }).code === '23503'
       ) {
         product.isActive = false;
-        await this.productsRepository.save(product);
+        await this.saveWithVersionGuard(product);
         return { deleted: false, archived: true };
       }
       throw error;
@@ -146,6 +146,10 @@ export class ProductsService {
    *    (the client should refresh and retry).
    */
   private async saveWithUniqueGuard(product: Product): Promise<Product> {
+    return this.saveWithVersionGuard(product);
+  }
+
+  private async saveWithVersionGuard(product: Product): Promise<Product> {
     try {
       return await this.productsRepository.save(product);
     } catch (error) {

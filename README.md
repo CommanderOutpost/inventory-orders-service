@@ -97,7 +97,7 @@ docker compose exec backend node dist/seed.js
 ```
 
 ### Option B — Local development
-Prerequisites: Node 20+, PostgreSQL 14+, Go 1.22+.
+Prerequisites: Node 20+, PostgreSQL 14+, Go 1.26+.
 
 ```bash
 # 1. install deps

@@ -37,6 +37,7 @@ describe('AuthService', () => {
   };
 
   beforeEach(() => {
+    jest.clearAllMocks();
     usersService = {
       findByEmail: jest.fn(),
       findById: jest.fn(),
@@ -111,6 +112,23 @@ describe('AuthService', () => {
       await expect(
         authService.login({ email: 'ghost@example.com', password: 'Passw0rd' }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('still runs a bcrypt comparison for unknown emails (no timing side channel)', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+      mockedBcrypt.compare.mockResolvedValue(false as never);
+
+      await expect(
+        authService.login({ email: 'ghost@example.com', password: 'Passw0rd' }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      // The compare must have run against a dummy hash, matching the time an
+      // existing account takes.
+      expect(mockedBcrypt.compare).toHaveBeenCalledTimes(1);
+      expect(mockedBcrypt.compare).toHaveBeenCalledWith(
+        'Passw0rd',
+        expect.stringMatching(/^\$2[aby]\$/),
+      );
     });
 
     it('rejects a wrong password', async () => {

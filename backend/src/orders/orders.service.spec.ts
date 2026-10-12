@@ -126,6 +126,27 @@ describe('OrdersService', () => {
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
+
+    it('rejects an order whose total exceeds the numeric column cap', async () => {
+      const highPriced = product({ id: 'p1', price: 9_999_999.99, stock: 2000 });
+      const highPriced2 = product({ id: 'p2', price: 9_999_999.99, stock: 2000 });
+      ordersRepository.manager.find.mockResolvedValue([highPriced, highPriced2]);
+      manager.findOne.mockImplementation((Entity) => {
+        if (Entity === Product) {
+          return Promise.resolve({ ...highPriced });
+        }
+        return Promise.resolve({ id: 'o1', items: [] });
+      });
+
+      await expect(
+        service.create('u1', {
+          items: [
+            { productId: 'p1', quantity: 1000 },
+            { productId: 'p2', quantity: 1000 },
+          ],
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
   });
 
   describe('findAll', () => {

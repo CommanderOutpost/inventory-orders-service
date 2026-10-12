@@ -27,9 +27,8 @@ export default function App() {
           <Route index element={<ProductsPage />} />
           <Route path="/products" element={<ProductsPage />} />
 
-          <Route element={<ProtectedRoute />}>
-            <Route path="/cart" element={<CartPage />} />
-          </Route>
+          {/* Cart is viewable by guests; the CartPage prompts sign-in at checkout. */}
+          <Route path="/cart" element={<CartPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route element={<RoleRoute allowedRoles={['customer']} />}>

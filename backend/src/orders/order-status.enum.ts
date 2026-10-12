@@ -20,7 +20,3 @@ export function canTransition(
 ): boolean {
   return TRANSITIONS[from]?.includes(to) ?? false;
 }
-
-export function isCancelledStatus(status: OrderStatus): boolean {
-  return status === OrderStatus.CANCELLED;
-}
