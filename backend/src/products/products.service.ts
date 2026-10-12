@@ -69,7 +69,7 @@ export class ProductsService {
       stock: dto.stock,
       isActive: dto.isActive ?? true,
     });
-    return this.productsRepository.save(product);
+    return this.saveWithUniqueGuard(product);
   }
 
   async update(id: string, dto: UpdateProductDto): Promise<Product> {
@@ -80,7 +80,7 @@ export class ProductsService {
     }
 
     this.productsRepository.merge(product, dto);
-    return this.productsRepository.save(product);
+    return this.saveWithUniqueGuard(product);
   }
 
   /**
@@ -114,6 +114,28 @@ export class ProductsService {
       throw new ConflictException(
         `A product with SKU "${sku}" already exists`,
       );
+    }
+  }
+
+  /**
+   * Saves a product and maps PostgreSQL's unique-violation (23505) to a
+   * friendly 409, covering the small race window between the SKU pre-check
+   * and the actual insert/update.
+   */
+  private async saveWithUniqueGuard(product: Product): Promise<Product> {
+    try {
+      return await this.productsRepository.save(product);
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        (error as { code?: string }).code === '23505'
+      ) {
+        throw new ConflictException(
+          `A product with SKU "${product.sku}" already exists`,
+        );
+      }
+      throw error;
     }
   }
 }

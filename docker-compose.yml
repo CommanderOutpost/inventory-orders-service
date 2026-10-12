@@ -34,7 +34,7 @@ services:
       DATABASE_URL: postgres://postgres:postgres@db:5432/inventory
       DB_SYNCHRONIZE: "false"
       DB_LOGGING: "false"
-      JWT_SECRET: ${JWT_SECRET:-docker-compose-change-me-0123456789abcdef}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your shell or a root .env file (e.g. openssl rand -hex 32)}
       JWT_EXPIRES_IN: 1d
       CORS_ORIGINS: http://localhost:5173,http://localhost
       REPORTING_SERVICE_URL: http://reporting:8080

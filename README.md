@@ -72,7 +72,8 @@ A small but complete full-stack **Inventory & Orders** application built for a t
 
 ### Orders (the core flow)
 - Place an order: server-side price calculation with **unit-price snapshots**, atomically **decrements stock** inside a transaction using pessimistic row locks (rows locked in id-sorted order to avoid deadlocks), rejects insufficient stock with a clear message.
-- Status state machine: `pending → paid → shipped → delivered`, cancellable from `pending`/`paid`. **Cancelling restores stock**.
+- Status state machine: `pending → paid → shipped → delivered`, cancellable from `pending`/`paid`. **Cancelling restores stock.**
+- Status transitions and cancellation take a **pessimistic lock on the order row**, so concurrent cancels serialize and stock is restored exactly once (covered by a unit test and a concurrent e2e test).
 - Customers can cancel their own pending orders; admins advance status. Scoping prevents customers from seeing other customers’ orders (404, no leakage).
 
 ### Reporting (Golang microservice)
@@ -83,6 +84,7 @@ A small but complete full-stack **Inventory & Orders** application built for a t
 
 ### Option A — Docker (whole stack)
 ```bash
+echo "JWT_SECRET=$(openssl rand -hex 32)" > .env   # required: compose fails fast without it
 docker compose up --build
 # frontend  → http://localhost:5173
 # backend   → http://localhost:3000/api/v1  (Swagger at /docs)

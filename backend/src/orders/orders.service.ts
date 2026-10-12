@@ -222,17 +222,30 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Loads an order inside a transaction with its items, optionally taking a
+   * pessimistic write lock on the order row. The lock is applied on a bare
+   * row read (not a joined query) because PostgreSQL rejects `FOR UPDATE` on
+   * the nullable side of an outer join. Locking serializes concurrent status
+   * transitions so restock-on-cancel can never run twice for the same order.
+   */
   private async findOrder(
     manager: EntityManager,
     id: string,
+    lock = true,
   ): Promise<Order> {
     const order = await manager.findOne(Order, {
       where: { id },
-      relations: ORDER_RELATIONS,
+      lock: lock ? { mode: 'pessimistic_write' } : undefined,
     });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
+
+    order.items = await manager.find(OrderItem, {
+      where: { orderId: id },
+      relations: { product: true },
+    });
     return order;
   }
 }

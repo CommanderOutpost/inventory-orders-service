@@ -18,6 +18,7 @@ describe('OrdersService', () => {
   >;
   let manager: {
     findOne: jest.Mock;
+    find: jest.Mock;
     save: jest.Mock;
     create: jest.Mock;
     increment: jest.Mock;
@@ -48,6 +49,7 @@ describe('OrdersService', () => {
   beforeEach(() => {
     manager = {
       findOne: jest.fn(),
+      find: jest.fn(async () => []),
       save: jest.fn(async (entity) => entity),
       create: jest.fn((_Entity, data) => data),
       increment: jest.fn(),
@@ -83,6 +85,7 @@ describe('OrdersService', () => {
       manager.findOne.mockImplementation(async (Entity) =>
         Entity === Product ? locked : savedOrder,
       );
+      manager.find.mockResolvedValue(savedOrder.items);
 
       const result = await service.create('u1', {
         items: [{ productId: 'p1', quantity: 2 }],
@@ -182,6 +185,7 @@ describe('OrdersService', () => {
         items: [{ productId: 'p1', quantity: 2 }],
       };
       manager.findOne.mockResolvedValue(order);
+      manager.find.mockResolvedValue(order.items);
 
       const result = await service.updateStatus('o1', OrderStatus.CANCELLED);
 
@@ -192,6 +196,23 @@ describe('OrdersService', () => {
         'stock',
         2,
       );
+    });
+
+    it('locks the order row so concurrent transitions cannot double-restock', async () => {
+      const order = {
+        id: 'o1',
+        userId: 'u1',
+        status: OrderStatus.PAID,
+        items: [{ productId: 'p1', quantity: 2 }],
+      };
+      manager.findOne.mockResolvedValue(order);
+
+      await service.updateStatus('o1', OrderStatus.CANCELLED);
+
+      const lockArg = manager.findOne.mock.calls[0][1];
+      expect(lockArg).toMatchObject({
+        lock: { mode: 'pessimistic_write' },
+      });
     });
   });
 
@@ -204,6 +225,7 @@ describe('OrdersService', () => {
         items: [{ productId: 'p1', quantity: 2 }],
       };
       manager.findOne.mockResolvedValue(order);
+      manager.find.mockResolvedValue(order.items);
 
       const result = await service.cancel('u1', 'o1');
 
@@ -214,6 +236,21 @@ describe('OrdersService', () => {
         'stock',
         2,
       );
+    });
+
+    it('locks the order row while cancelling', async () => {
+      const order = {
+        id: 'o1',
+        userId: 'u1',
+        status: OrderStatus.PENDING,
+        items: [],
+      };
+      manager.findOne.mockResolvedValue(order);
+
+      await service.cancel('u1', 'o1');
+
+      const lockArg = manager.findOne.mock.calls[0][1];
+      expect(lockArg).toMatchObject({ lock: { mode: 'pessimistic_write' } });
     });
 
     it('refuses to cancel another customers order', async () => {
@@ -257,6 +294,7 @@ describe('OrdersService', () => {
       manager.findOne.mockImplementation(async (Entity) =>
         Entity === Product ? locked : savedOrder,
       );
+      manager.find.mockResolvedValue(savedOrder.items);
 
       const result = await service.create('u1', {
         items: [{ productId: 'p1', quantity: 1 }],

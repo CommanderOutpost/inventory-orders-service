@@ -322,5 +322,38 @@ describe('Inventory & Orders API (e2e)', () => {
         .expect(200);
       expect(orderAfter.body.status).toBe(OrderStatus.CANCELLED);
     });
+
+    it('restores stock exactly once under concurrent cancels', async () => {
+      const adminToken = await loginAdmin();
+      const product = await createProduct(adminToken, { stock: 10 });
+      const customerRes = await register('race1');
+      const customerToken = customerRes.body.accessToken as string;
+
+      const order = await http
+        .post('/api/v1/orders')
+        .set(authHeader(customerToken))
+        .send({ items: [{ productId: product.id, quantity: 4 }] })
+        .expect(201);
+
+      // Fire two cancels at once: the row lock serializes them so only one
+      // can win the transition, and stock is restored exactly once.
+      const [first, second] = await Promise.all([
+        http
+          .post(`/api/v1/orders/${order.body.id}/cancel`)
+          .set(authHeader(customerToken)),
+        http
+          .post(`/api/v1/orders/${order.body.id}/cancel`)
+          .set(authHeader(customerToken)),
+      ]);
+
+      const statuses = [first.status, second.status].sort();
+      expect(statuses[0]).toBe(201); // one succeeded
+      expect(statuses[1]).toBe(400); // the other saw the terminal state
+
+      const productAfter = await http
+        .get(`/api/v1/products/${product.id}`)
+        .expect(200);
+      expect(productAfter.body.stock).toBe(10); // 4 restored once, not twice
+    });
   });
 });
