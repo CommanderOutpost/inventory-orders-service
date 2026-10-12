@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -59,6 +61,7 @@ export class OrdersController {
   }
 
   @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
   cancel(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

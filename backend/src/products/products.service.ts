@@ -74,7 +74,7 @@ export class ProductsService {
       stock: dto.stock,
       isActive: dto.isActive ?? true,
     });
-    return this.saveWithUniqueGuard(product);
+    return this.saveWithWriteGuard(product);
   }
 
   async update(id: string, dto: UpdateProductDto): Promise<Product> {
@@ -85,7 +85,7 @@ export class ProductsService {
     }
 
     this.productsRepository.merge(product, dto);
-    return this.saveWithUniqueGuard(product);
+    return this.saveWithWriteGuard(product);
   }
 
   /**
@@ -104,7 +104,7 @@ export class ProductsService {
 
     if (referenced > 0) {
       product.isActive = false;
-      await this.saveWithVersionGuard(product);
+      await this.saveWithWriteGuard(product);
       return { deleted: false, archived: true };
     }
 
@@ -119,7 +119,7 @@ export class ProductsService {
         (error as { code?: string }).code === '23503'
       ) {
         product.isActive = false;
-        await this.saveWithVersionGuard(product);
+        await this.saveWithWriteGuard(product);
         return { deleted: false, archived: true };
       }
       throw error;
@@ -145,11 +145,7 @@ export class ProductsService {
    *  - an optimistic-lock mismatch when another writer updated the product
    *    (the client should refresh and retry).
    */
-  private async saveWithUniqueGuard(product: Product): Promise<Product> {
-    return this.saveWithVersionGuard(product);
-  }
-
-  private async saveWithVersionGuard(product: Product): Promise<Product> {
+  private async saveWithWriteGuard(product: Product): Promise<Product> {
     try {
       return await this.productsRepository.save(product);
     } catch (error) {

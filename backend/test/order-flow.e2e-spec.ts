@@ -347,7 +347,7 @@ describe('Inventory & Orders API (e2e)', () => {
       await http
         .post(`/api/v1/orders/${order.body.id}/cancel`)
         .set(authHeader(customerToken))
-        .expect(201);
+        .expect(200);
 
       const productAfter = await http
         .get(`/api/v1/products/${product.id}`)
@@ -417,7 +417,7 @@ describe('Inventory & Orders API (e2e)', () => {
       ]);
 
       const statuses = [first.status, second.status].sort();
-      expect(statuses[0]).toBe(201); // one succeeded
+      expect(statuses[0]).toBe(200); // one succeeded
       expect(statuses[1]).toBe(400); // the other saw the terminal state
 
       const productAfter = await http
