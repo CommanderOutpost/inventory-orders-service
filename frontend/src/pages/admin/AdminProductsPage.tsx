@@ -52,6 +52,15 @@ export function AdminProductsPage() {
     },
   });
 
+  const restoreMutation = useMutation({
+    mutationFn: (product: Product) =>
+      productsApi.update(product.id, { isActive: true }),
+    onSuccess: () => {
+      pushToast('success', 'Product restored to the catalogue');
+      invalidate();
+    },
+  });
+
   const handleSave = (values: ProductFormValues) => {
     saveMutation.mutate({
       name: values.name,
@@ -142,7 +151,7 @@ export function AdminProductsPage() {
                             onClick={() => {
                               if (
                                 window.confirm(
-                                  `Archive "${product.name}"? It will no longer be visible to customers.`,
+                                  `Archive/delete "${product.name}"? Products without order history are deleted; others are archived (hidden from customers).`,
                                 )
                               ) {
                                 removeMutation.mutate(product.id);
@@ -154,16 +163,8 @@ export function AdminProductsPage() {
                         ) : (
                           <button
                             className="btn btn--ghost btn--sm"
-                            onClick={() =>
-                              saveMutation.mutate({
-                                name: product.name,
-                                sku: product.sku,
-                                description: product.description ?? undefined,
-                                price: product.price,
-                                stock: product.stock,
-                                isActive: true,
-                              })
-                            }
+                            disabled={restoreMutation.isPending}
+                            onClick={() => restoreMutation.mutate(product)}
                           >
                             Restore
                           </button>

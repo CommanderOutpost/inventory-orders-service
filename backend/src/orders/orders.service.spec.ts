@@ -184,18 +184,20 @@ describe('OrdersService', () => {
         status: OrderStatus.PAID,
         items: [{ productId: 'p1', quantity: 2 }],
       };
-      manager.findOne.mockResolvedValue(order);
+      const lockedProduct = product({ stock: 5 });
+      manager.findOne.mockImplementation((Entity) =>
+        Entity === Product ? Promise.resolve(lockedProduct) : Promise.resolve(order),
+      );
       manager.find.mockResolvedValue(order.items);
 
       const result = await service.updateStatus('o1', OrderStatus.CANCELLED);
 
       expect(result.status).toBe(OrderStatus.CANCELLED);
-      expect(manager.increment).toHaveBeenCalledWith(
-        Product,
-        { id: 'p1' },
-        'stock',
-        2,
+      // The locked product is reloaded, restocked and saved (version-safe).
+      const savedProduct = manager.save.mock.calls.find(
+        ([entity]) => entity === lockedProduct,
       );
+      expect(savedProduct[0].stock).toBe(7);
     });
 
     it('locks the order row so concurrent transitions cannot double-restock', async () => {
@@ -224,18 +226,19 @@ describe('OrdersService', () => {
         status: OrderStatus.PENDING,
         items: [{ productId: 'p1', quantity: 2 }],
       };
-      manager.findOne.mockResolvedValue(order);
+      const lockedProduct = product({ stock: 5 });
+      manager.findOne.mockImplementation((Entity) =>
+        Entity === Product ? Promise.resolve(lockedProduct) : Promise.resolve(order),
+      );
       manager.find.mockResolvedValue(order.items);
 
       const result = await service.cancel('u1', 'o1');
 
       expect(result.status).toBe(OrderStatus.CANCELLED);
-      expect(manager.increment).toHaveBeenCalledWith(
-        Product,
-        { id: 'p1' },
-        'stock',
-        2,
+      const savedProduct = manager.save.mock.calls.find(
+        ([entity]) => entity === lockedProduct,
       );
+      expect(savedProduct[0].stock).toBe(7);
     });
 
     it('locks the order row while cancelling', async () => {

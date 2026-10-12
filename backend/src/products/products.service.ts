@@ -29,8 +29,9 @@ export class ProductsService {
     }
 
     let where: Record<string, unknown> | Record<string, unknown>[] = base;
-    if (query.search) {
-      const term = `%${query.search.trim()}%`;
+    const trimmedSearch = query.search?.trim();
+    if (trimmedSearch) {
+      const term = `%${trimmedSearch}%`;
       where = [
         { ...base, name: ILike(term) },
         { ...base, sku: ILike(term) },

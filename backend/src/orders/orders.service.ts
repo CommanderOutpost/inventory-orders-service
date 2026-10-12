@@ -213,17 +213,25 @@ export class OrdersService {
     return products;
   }
 
+  /**
+   * Returns stock to a product. Uses a locked read + save so the `version`
+   * column is honoured: a concurrent admin edit with a stale version fails
+   * its optimizer check instead of silently overwriting the restored stock.
+   */
   private async restockItems(
     manager: EntityManager,
     order: Order,
   ): Promise<void> {
     for (const item of order.items) {
-      await manager.increment(
-        Product,
-        { id: item.productId },
-        'stock',
-        item.quantity,
-      );
+      const product = await manager.findOne(Product, {
+        where: { id: item.productId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!product) {
+        continue;
+      }
+      product.stock += item.quantity;
+      await manager.save(product);
     }
   }
 

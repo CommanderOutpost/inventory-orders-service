@@ -133,5 +133,19 @@ describe('ProductsService', () => {
       expect(result).toEqual({ deleted: true, archived: false });
       expect(productsRepository.remove).toHaveBeenCalled();
     });
+
+    it('falls back to archiving if a concurrent order blocks the delete', async () => {
+      productsRepository.findOne.mockResolvedValue(product);
+      orderItemsRepository.count.mockResolvedValue(0);
+      productsRepository.remove.mockRejectedValue({ code: '23503' } as never);
+      productsRepository.save.mockResolvedValue(product as never);
+
+      const result = await service.remove('p1');
+
+      expect(result).toEqual({ deleted: false, archived: true });
+      expect(productsRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isActive: false }),
+      );
+    });
   });
 });
