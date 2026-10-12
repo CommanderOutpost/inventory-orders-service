@@ -20,6 +20,12 @@ export interface AuthResult {
 
 const BCRYPT_ROUNDS = 12;
 
+// A fixed valid bcrypt hash of an arbitrary password, compared against when
+// the email is unknown so login timing does not reveal whether an account
+// exists (account-enumeration side channel).
+const DUMMY_PASSWORD_HASH =
+  '$2b$12$h0NWW1HVnHJX2Wi9MqMEqOcpFD2J3mPIJGvFboQQ2VV4JLLkOfoX6';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -46,15 +52,15 @@ export class AuthService {
 
   async login(dto: LoginDto): Promise<AuthResult> {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
 
+    // Always run a bcrypt comparison so response timing does not reveal
+    // whether the email exists.
     const passwordMatches = await bcrypt.compare(
       dto.password,
-      user.passwordHash,
+      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
     );
-    if (!passwordMatches) {
+
+    if (!user || !passwordMatches) {
       throw new UnauthorizedException('Invalid email or password');
     }
 

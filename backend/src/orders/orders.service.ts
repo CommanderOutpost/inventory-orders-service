@@ -96,6 +96,14 @@ export class OrdersService {
         notes: dto.notes ?? null,
         items: items.map((item) => manager.create(OrderItem, item)),
       });
+
+      // Guard the largest representable numeric(12,2) value.
+      if (order.totalAmount > 9_999_999_999.99) {
+        throw new BadRequestException(
+          'Order total is too large to process',
+        );
+      }
+
       const saved = await manager.save(order);
 
       return this.findOrder(manager, saved.id);

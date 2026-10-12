@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { OptimisticLockVersionMismatchError, Repository } from 'typeorm';
 import { ProductsService } from './products.service';
 import { Product } from '../database/entities/product.entity';
 import { OrderItem } from '../database/entities/order-item.entity';
@@ -103,6 +103,18 @@ describe('ProductsService', () => {
       productsRepository.findOne.mockResolvedValue(null);
       productsRepository.create.mockReturnValue(product);
       productsRepository.save.mockRejectedValue({ code: '23505' } as never);
+
+      await expect(
+        service.create({ name: 'Coffee', sku: 'COF-2', price: 10, stock: 5 }),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('maps an optimistic-lock mismatch to a 409 Conflict', async () => {
+      productsRepository.findOne.mockResolvedValue(null);
+      productsRepository.create.mockReturnValue(product);
+      productsRepository.save.mockRejectedValue(
+        new OptimisticLockVersionMismatchError('products', 1, 2) as never,
+      );
 
       await expect(
         service.create({ name: 'Coffee', sku: 'COF-2', price: 10, stock: 5 }),
