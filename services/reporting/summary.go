@@ -159,9 +159,9 @@ func (h *SummaryHandler) orderSummary(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
 
-	if (from != "" && !isRFC3339(from)) || (to != "" && !isRFC3339(to)) {
+	if (from != "" && !isSupportedDate(from)) || (to != "" && !isSupportedDate(to)) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "from and to must be RFC 3339 timestamps",
+			"error": "from and to must be RFC 3339 timestamps or YYYY-MM-DD dates",
 		})
 		return
 	}
@@ -181,7 +181,19 @@ func (h *SummaryHandler) orderSummary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, summary)
 }
 
-func isRFC3339(value string) bool {
-	_, err := time.Parse(time.RFC3339, value)
-	return err == nil
+// isSupportedDate accepts full RFC 3339 timestamps as well as simpler
+// date-only / minute-precision values (treated as UTC by Postgres).
+func isSupportedDate(value string) bool {
+	for _, layout := range []string{
+		time.RFC3339,
+		time.RFC3339Nano,
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		"2006-01-02",
+	} {
+		if _, err := time.Parse(layout, value); err == nil {
+			return true
+		}
+	}
+	return false
 }

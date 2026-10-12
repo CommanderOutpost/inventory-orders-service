@@ -42,7 +42,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         `Unhandled error on ${request.method} ${request.url}`,
         exception.stack,
       );
-      message = exception.message;
+      // Never leak internal error details to clients.
+      message = 'Internal server error';
     }
 
     response.status(statusCode).json({

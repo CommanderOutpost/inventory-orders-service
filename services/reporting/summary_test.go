@@ -9,20 +9,22 @@ import (
 	"testing"
 )
 
-func TestIsRFC3339(t *testing.T) {
+func TestIsSupportedDate(t *testing.T) {
 	cases := []struct {
 		input string
 		want  bool
 	}{
 		{"2026-10-12T00:00:00Z", true},
 		{"2026-10-12T00:00:00+01:00", true},
-		{"2026-10-12", false},
+		{"2026-10-12T00:00:00", true},
+		{"2026-10-12T14:30", true},
+		{"2026-10-12", true},
 		{"", false},
 		{"not-a-date", false},
 	}
 	for _, tc := range cases {
-		if got := isRFC3339(tc.input); got != tc.want {
-			t.Errorf("isRFC3339(%q) = %v, want %v", tc.input, got, tc.want)
+		if got := isSupportedDate(tc.input); got != tc.want {
+			t.Errorf("isSupportedDate(%q) = %v, want %v", tc.input, got, tc.want)
 		}
 	}
 }
@@ -32,7 +34,7 @@ func TestIsRFC3339(t *testing.T) {
 func TestOrderSummaryRejectsInvalidParams(t *testing.T) {
 	handler := &SummaryHandler{store: &OrderStore{}}
 
-	for _, query := range []string{"?from=2026-10-01", "?to=nonsense", "?from=10/12/2026"} {
+	for _, query := range []string{"?from=not-a-date", "?to=nonsense", "?from=10/12/2026", "?from=2026-13-45"} {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/summary/orders"+query, nil)
 		rec := httptest.NewRecorder()
 

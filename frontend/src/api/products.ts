@@ -25,6 +25,12 @@ export const productsApi = {
       .get<Paginated<Product>>('/products', { params: query })
       .then((r) => r.data),
 
+  /** Admin-only listing that includes archived/inactive products. */
+  listAdmin: (query: ProductQuery = {}) =>
+    api
+      .get<Paginated<Product>>('/products/admin', { params: query })
+      .then((r) => r.data),
+
   get: (id: string) =>
     api.get<Product>(`/products/${id}`).then((r) => r.data),
 

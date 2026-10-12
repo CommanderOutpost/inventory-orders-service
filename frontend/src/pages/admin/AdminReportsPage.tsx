@@ -8,9 +8,18 @@ export function AdminReportsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
+  // datetime-local yields "YYYY-MM-DDTHH:mm"; normalize to full RFC 3339
+  // (UTC) which the reporting service requires.
+  const toRfc3339 = (value: string): string | undefined =>
+    value ? new Date(value).toISOString() : undefined;
+
   const { data, isPending, isError, refetch, isFetching } = useQuery({
     queryKey: ['reports', 'order-summary', { from, to }],
-    queryFn: () => reportsApi.orderSummary({ from: from || undefined, to: to || undefined }),
+    queryFn: () =>
+      reportsApi.orderSummary({
+        from: toRfc3339(from),
+        to: toRfc3339(to),
+      }),
   });
 
   const statusCount = (status: OrderStatus): number =>
@@ -54,8 +63,8 @@ export function AdminReportsPage() {
 
       {isError && (
         <div className="error-block">
-          Could not load the report. Is the Golang reporting service running?
-          (See README → reports)
+          Could not load the report. Make sure the Golang reporting service is
+          running (see README → reports) and the date range is valid.
         </div>
       )}
 

@@ -18,7 +18,7 @@ export function AdminProductsPage() {
   const { data, isPending, isError } = useQuery({
     queryKey: ['admin-products', { search, page }],
     queryFn: () =>
-      productsApi.list({ search, page, limit: 10, includeInactive: true }),
+      productsApi.listAdmin({ search, page, limit: 10, includeInactive: true }),
   });
 
   const invalidate = () => {

@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
   IsArray,
   IsInt,
@@ -26,6 +27,7 @@ export class CreateOrderItemDto {
 export class CreateOrderDto {
   @IsArray()
   @ArrayNotEmpty({ message: 'An order must contain at least one item' })
+  @ArrayMaxSize(50, { message: 'An order cannot contain more than 50 items' })
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items: CreateOrderItemDto[];

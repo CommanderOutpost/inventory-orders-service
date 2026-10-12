@@ -148,6 +148,14 @@ describe('Inventory & Orders API (e2e)', () => {
         .set(authHeader(customerRes.body.accessToken))
         .expect(403);
     });
+
+    it('rejects non-RFC3339 report date filters with 400', async () => {
+      const token = await loginAdmin();
+      await http
+        .get('/api/v1/reports/order-summary?from=2026-10-12')
+        .set(authHeader(token))
+        .expect(400);
+    });
   });
 
   describe('product management', () => {
@@ -175,6 +183,39 @@ describe('Inventory & Orders API (e2e)', () => {
         .set(authHeader(token))
         .send({ name: 'Another', sku: 'DUP-SKU', price: 1, stock: 1 })
         .expect(409);
+    });
+
+    it('does not leak archived products to the public catalogue', async () => {
+      const token = await loginAdmin();
+      const product = await createProduct(token, { sku: 'LEAK-SKU' });
+
+      // Give the product order history so DELETE soft-archives it.
+      const customerRes = await register('leak1');
+      await http
+        .post('/api/v1/orders')
+        .set(authHeader(customerRes.body.accessToken))
+        .send({ items: [{ productId: product.id, quantity: 1 }] })
+        .expect(201);
+
+      await http
+        .delete(`/api/v1/products/${product.id}`)
+        .set(authHeader(token))
+        .expect(200);
+
+      // Even with includeInactive=true, the public endpoint must hide it.
+      const publicList = await http
+        .get('/api/v1/products?includeInactive=true')
+        .expect(200);
+      const ids = publicList.body.data.map((p: { id: string }) => p.id);
+      expect(ids).not.toContain(product.id);
+
+      // The admin-only endpoint returns it (with includeInactive).
+      const adminList = await http
+        .get(`/api/v1/products/admin?includeInactive=true`)
+        .set(authHeader(token))
+        .expect(200);
+      const adminIds = adminList.body.data.map((p: { id: string }) => p.id);
+      expect(adminIds).toContain(product.id);
     });
   });
 

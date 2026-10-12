@@ -1,4 +1,8 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppConfig } from '../config/configuration';
 import { QuerySummaryDto } from './dto/query-summary.dto';
@@ -37,13 +41,17 @@ export class ReportsService {
       });
 
       if (!response.ok) {
-        throw new ServiceUnavailableException(
+        // The upstream responded, but with an error — that's a gateway problem.
+        throw new BadGatewayException(
           `Reporting service responded with status ${response.status}`,
         );
       }
       return await response.json();
     } catch (error) {
-      if (error instanceof ServiceUnavailableException) {
+      if (
+        error instanceof BadGatewayException ||
+        error instanceof ServiceUnavailableException
+      ) {
         throw error;
       }
       throw new ServiceUnavailableException(
@@ -54,3 +62,4 @@ export class ReportsService {
     }
   }
 }
+

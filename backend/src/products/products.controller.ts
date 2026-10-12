@@ -28,6 +28,16 @@ export class ProductsController {
   @Public()
   @Get()
   findAll(@Query() query: QueryProductsDto): Promise<Paginated<Product>> {
+    // The public catalogue never exposes archived/inactive products.
+    return this.productsService.findAll({ ...query, includeInactive: false });
+  }
+
+  /** Admin-only listing that includes archived products. */
+  @Roles(UserRole.ADMIN)
+  @Get('admin')
+  findAllForAdmin(
+    @Query() query: QueryProductsDto,
+  ): Promise<Paginated<Product>> {
     return this.productsService.findAll(query);
   }
 

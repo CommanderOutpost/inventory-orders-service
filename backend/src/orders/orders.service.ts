@@ -60,7 +60,7 @@ export class OrdersService {
       for (const product of sortedProducts) {
         const requested = quantityByProduct.get(product.id) as number;
         const locked = await manager.findOne(Product, {
-          where: { id: product.id },
+          where: { id: product.id, isActive: true },
           lock: { mode: 'pessimistic_write' },
         });
 
