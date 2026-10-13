@@ -84,7 +84,7 @@ export function ProductFormModal({
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="form-grid">
           <div className="form-field">
             <label htmlFor="pf-price">Price (USD)</label>
             <input

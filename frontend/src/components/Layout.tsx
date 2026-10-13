@@ -8,32 +8,45 @@ export function Layout() {
   const cartCount = useCartStore(selectCartCount);
   const navigate = useNavigate();
 
+  const isAdmin = user?.role === 'admin';
+  const isCustomer = user?.role === 'customer';
+  // Guests and customers shop; admins only see the admin console.
+  const canShop = !isAdmin;
+
   const handleLogout = () => {
     logout();
     navigate('/products');
   };
 
+  const cartLink = (
+    <NavLink to="/cart" className="nav__link nav__link--cart">
+      Cart{cartCount > 0 ? ` (${cartCount})` : ''}
+    </NavLink>
+  );
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="topbar__inner">
-          <NavLink to="/products" className="brand">
+          <NavLink to={isAdmin ? '/admin/orders' : '/products'} className="brand">
             <span className="brand__mark">AS</span>
             Atlas Supply Co.
           </NavLink>
 
           <nav className="nav">
-            <NavLink to="/products" className="nav__link">
-              Products
-            </NavLink>
+            {canShop && (
+              <NavLink to="/products" className="nav__link">
+                Products
+              </NavLink>
+            )}
 
-            {user?.role === 'customer' && (
+            {isCustomer && (
               <NavLink to="/orders" className="nav__link">
                 My Orders
               </NavLink>
             )}
 
-            {user?.role === 'admin' && (
+            {isAdmin && (
               <>
                 <NavLink to="/admin/orders" className="nav__link">
                   Orders
@@ -51,9 +64,7 @@ export function Layout() {
           <div className="topbar__actions">
             {user ? (
               <>
-                <NavLink to="/cart" className="nav__link nav__link--cart">
-                  Cart{cartCount > 0 ? ` (${cartCount})` : ''}
-                </NavLink>
+                {canShop && cartLink}
                 <span className="user-chip" title={user.email}>
                   {user.name}
                   <span className="user-chip__role">{user.role}</span>
@@ -64,9 +75,7 @@ export function Layout() {
               </>
             ) : (
               <>
-                <NavLink to="/cart" className="nav__link nav__link--cart">
-                  Cart{cartCount > 0 ? ` (${cartCount})` : ''}
-                </NavLink>
+                {cartLink}
                 <NavLink to="/login" className="btn btn--ghost btn--sm">
                   Sign in
                 </NavLink>

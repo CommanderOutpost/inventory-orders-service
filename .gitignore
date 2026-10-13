@@ -18,6 +18,9 @@ services/reporting/reporting-service
 .env.*.local
 !.env.example
 
+# Local docker-compose overrides (machine-specific settings like port remaps)
+docker-compose.override.yml
+
 # Logs
 *.log
 logs/

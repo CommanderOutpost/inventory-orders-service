@@ -99,7 +99,7 @@ export function AdminReportsPage() {
             </div>
           </div>
 
-          <div className="detail-grid" style={{ gridTemplateColumns: '1fr 1.6fr' }}>
+          <div className="detail-grid detail-grid--reports">
             <div className="card detail-card">
               <h3 style={{ marginTop: 0 }}>Orders by status</h3>
               {data.ordersByStatus.length === 0 ? (

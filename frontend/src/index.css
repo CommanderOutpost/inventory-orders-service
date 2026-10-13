@@ -822,3 +822,116 @@ a {
   margin: 0;
   font-weight: 600;
 }
+
+/* ---------- Responsive ---------- */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.detail-grid--reports {
+  grid-template-columns: 1fr 1.6fr;
+}
+
+@media (max-width: 860px) {
+  .content {
+    padding: 20px 16px 40px;
+  }
+
+  /* Top bar wraps: nav drops to its own full-width, horizontally scrollable row. */
+  .topbar__inner {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 10px 16px;
+  }
+
+  .nav {
+    order: 3;
+    flex-basis: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .brand {
+    font-size: 15px;
+  }
+
+  .brand__mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .topbar__actions {
+    margin-left: auto;
+  }
+
+  /* Wide tables become clear horizontal-scroll panes instead of squeezing. */
+  .table {
+    min-width: 560px;
+  }
+
+  .detail-grid--reports {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .stat-card__value {
+    font-size: 22px;
+  }
+
+  .toaster {
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cart-line {
+    flex-wrap: wrap;
+  }
+
+  .cart-line__price {
+    margin-left: auto;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modal {
+    padding: 18px 16px;
+  }
+
+  .modal__actions {
+    flex-direction: column-reverse;
+  }
+
+  .modal__actions .btn {
+    width: 100%;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
