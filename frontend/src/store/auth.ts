@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useCartStore } from './cart';
 import type { User } from '../types';
 
 interface AuthState {
@@ -15,7 +16,11 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       setAuth: (user, token) => set({ user, token }),
-      logout: () => set({ user: null, token: null }),
+      logout: () => {
+        set({ user: null, token: null });
+        // The cart is per-browser, so it must not leak between users.
+        useCartStore.getState().clear();
+      },
     }),
     { name: 'atlas-auth' },
   ),

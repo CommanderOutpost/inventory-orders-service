@@ -68,7 +68,7 @@ A small but complete full-stack **Inventory & Orders** application built for a t
 ### Products
 - Public browsing with pagination, search (name/SKU, case-insensitive) and sorting.
 - Admin CRUD. Deleting a product that has order history **soft-archives** it (`isActive=false`) to preserve referential integrity; otherwise it is hard-deleted. Archived products can be restored.
-- `@VersionColumn` optimistic locking on stock updates.
+- `@VersionColumn` optimistic locking: every admin edit must include the product version the client read; an edit against a concurrently changed product returns 409 instead of silently overwriting stock.
 
 ### Orders (the core flow)
 - Place an order: server-side price calculation with **unit-price snapshots**, atomically **decrements stock** inside a transaction using pessimistic row locks (rows locked in id-sorted order to avoid deadlocks), rejects insufficient stock with a clear message.
@@ -79,6 +79,7 @@ A small but complete full-stack **Inventory & Orders** application built for a t
 ### Reporting (Golang microservice)
 - `GET /api/v1/summary/orders?from=&to=` aggregates totals, revenue, average order value, orders-by-status and top products by revenue.
 - The NestJS API proxies it (`GET /api/v1/reports/order-summary`, admin only) with a 5s timeout; a clear 503 is returned when the Go service is down.
+- The Go service reads the orders/products tables directly (see "Assumptions & trade-offs" for the schema-coupling trade-off). It is gated by a shared `REPORTING_TOKEN` and is **not published** to the host in Docker, so it cannot be called directly. In local dev it trusts the loopback interface.
 
 ## Quick start
 
@@ -88,13 +89,18 @@ echo "JWT_SECRET=$(openssl rand -hex 32)" > .env   # required: compose fails fas
 docker compose up --build
 # frontend  → http://localhost:5173
 # backend   → http://localhost:3000/api/v1  (Swagger at /docs)
-# reporting → http://localhost:8080
+#
+# The reporting service listens on :8080 on the internal Docker network only;
+# it is NOT published to the host. In this mode it is secured by a shared
+# REPORTING_TOKEN that only the backend sends.
 ```
 The backend applies migrations automatically on startup. Seeded demo data (admin + 8 products) is **not** auto-inserted — run:
 
 ```bash
 docker compose exec backend node dist/seed.js
 ```
+
+The seed reads `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (defaults: `admin@example.com` / `Admin123!`; override in your root `.env`).
 
 ### Option B — Local development
 Prerequisites: Node 20+, PostgreSQL 14+, Go 1.26+.
@@ -108,7 +114,12 @@ createdb inventory
 make migrate        # applies TypeORM migrations
 make seed           # admin + sample products
 
-# 3. run the three services (three terminals)
+# 3. environment — copy the example and give it a real JWT secret
+cp backend/.env.example backend/.env
+#    then: sed -i '' "s|JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" backend/.env
+cp frontend/.env.example frontend/.env.local
+
+# 4. run the three services (three terminals)
 make run-backend    # :3000
 make run-go         # :8080
 make run-frontend   # :5173 (proxies /api to :3000)
@@ -126,10 +137,13 @@ cp frontend/.env.example frontend/.env.local
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `DATABASE_URL` | *(required)* | Postgres DSN, e.g. `postgres://localhost:5432/inventory` |
-| `JWT_SECRET` | *(required)* | ≥16 chars |
+| `JWT_SECRET` | *(required)* | ≥16 chars; placeholders like `change-me-…` are rejected |
 | `JWT_EXPIRES_IN` | `1d` | token lifetime |
 | `CORS_ORIGINS` | `http://localhost:5173` | comma-separated |
 | `REPORTING_SERVICE_URL` | `http://localhost:8080` | Go service base URL |
+| `REPORTING_TOKEN` | *(empty)* | shared token the backend sends to the Go service; set it when the reporting port is reachable beyond loopback. *(Docker sets a default automatically.)* |
+| `SEED_ADMIN_EMAIL` | `admin@example.com` | seed admin login |
+| `SEED_ADMIN_PASSWORD` | `Admin123!` | seed admin password (min 8 chars) |
 | `DB_SYNCHRONIZE` | `false` | keep false; migrations are the source of truth |
 
 ## API overview
@@ -168,7 +182,9 @@ cd backend && npm test
 
 # Backend e2e tests against a real Postgres (creates/uses `inventory_test`)
 createdb inventory_test
-cd backend && npm run test:e2e
+cd backend && TEST_DATABASE_URL=postgres://localhost:5432/inventory_test npm run test:e2e
+# (TEST_DATABASE_URL is optional; it defaults to the trust-auth local DSN.
+# Set it if your local Postgres requires credentials.)
 
 # Go tests (unit + optional integration when TEST_DATABASE_URL is set)
 cd services/reporting && go test ./...
@@ -185,11 +201,12 @@ The e2e suite covers the **core order flow**: registration/login, RBAC, stock de
 - **Cancelled orders** are excluded from revenue/reporting metrics but still appear in the status breakdown.
 - **Price snapshots** are stored per line item; later product price edits never rewrite historical orders.
 - **Delete semantics**: products with order history are soft-archived rather than deleted to keep history valid; clean products are hard-deleted.
+- **Stock integrity**: the order path uses pessimistic row locks so concurrent orders can never oversell, and every admin product edit carries the version the client read — a stale edit (e.g. stock changed meanwhile) returns 409 instead of silently overwriting it.
 - **Money** is stored as `numeric(12,2)` in Postgres and surfaced as JS numbers — fine for this scale (well below `Number.MAX_SAFE_INTEGER`); a decimal library would be warranted for very large volumes.
 - **No payments** — order placement creates a `pending` order; an admin advances it to `paid`/`shipped`/`delivered`.
-- **Row locking** (pessimistic) chosen over pure optimistic retry for simplicity and guaranteed correctness under concurrency; products also carry a `version` column for extra safety.
+- **Row locking** (pessimistic) chosen over pure optimistic retry for simplicity and guaranteed correctness under concurrency; products also carry a `version` column, enforced with every admin edit.
 - **Global error filter** returns structured errors; the frontend normalises them into toasts and auto-logs-out on 401.
-- **Reporting** runs a dedicated Go process that owns the aggregation SQL; the API stays a thin proxy so the two teams/services can evolve independently.
+- **Reporting** runs a dedicated Go process that owns the aggregation SQL. Today it reads the orders/products tables directly, so a schema change in the NestJS service must be coordinated with the reports team (no event bus yet — see "What I would improve"). The service is internal-only in Docker and authenticated with a shared token.
 
 ## What I would improve with more time
 

@@ -37,6 +37,12 @@ export function AdminProductsPage() {
       setCreating(false);
       invalidate();
     },
+    onError: () => {
+      // A 409 (stale version / concurrent edit) is surfaced by the global
+      // toast; refresh the table so the admin sees the current stock and
+      // re-edits from a fresh version.
+      invalidate();
+    },
   });
 
   const removeMutation = useMutation({
@@ -54,7 +60,10 @@ export function AdminProductsPage() {
 
   const restoreMutation = useMutation({
     mutationFn: (product: Product) =>
-      productsApi.update(product.id, { isActive: true }),
+      productsApi.update(product.id, {
+        isActive: true,
+        version: product.version,
+      }),
     onSuccess: () => {
       pushToast('success', 'Product restored to the catalogue');
       invalidate();
@@ -69,6 +78,10 @@ export function AdminProductsPage() {
       price: Number(values.price),
       stock: Number(values.stock),
       isActive: values.isActive,
+      // The version read when the edit form was opened; a concurrent change
+      // (e.g. sold stock) will then be rejected as a 409 instead of being
+      // silently overwritten.
+      version: editing?.version,
     });
   };
 

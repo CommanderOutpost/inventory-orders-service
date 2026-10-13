@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,7 +37,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           logRequests(mux),
+		Handler:           logRequests(requireToken(cfg.ReportingToken)(mux)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -67,9 +69,39 @@ func logRequests(next http.Handler) http.Handler {
 	})
 }
 
+// requireToken guards every route with a shared internal token. When no token
+// is configured (local development against a loopback interface) requests are
+// allowed; when one is set, a `Authorization: Bearer <token>` header must
+// match in constant time. This keeps the reporting data admin-only even if
+// the port is exposed.
+func requireToken(expected string) func(http.Handler) http.Handler {
+	if expected == "" {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	expectedBytes := []byte(expected)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			const prefix = "Bearer "
+			auth := r.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, prefix) ||
+				subtle.ConstantTimeCompare(
+					[]byte(strings.TrimPrefix(auth, prefix)),
+					expectedBytes,
+				) != 1 {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{
+					"error": "unauthorized",
+				})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 type config struct {
-	Port        string
-	DatabaseURL string
+	Port           string
+	DatabaseURL    string
+	ReportingToken string
 }
 
 func loadConfig() config {
@@ -81,7 +113,11 @@ func loadConfig() config {
 	if databaseURL == "" {
 		databaseURL = "postgres://localhost:5432/inventory"
 	}
-	return config{Port: port, DatabaseURL: databaseURL}
+	return config{
+		Port:           port,
+		DatabaseURL:    databaseURL,
+		ReportingToken: os.Getenv("REPORTING_TOKEN"),
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

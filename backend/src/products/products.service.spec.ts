@@ -1,5 +1,5 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { OptimisticLockVersionMismatchError, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ProductsService } from './products.service';
 import { Product } from '../database/entities/product.entity';
 import { OrderItem } from '../database/entities/order-item.entity';
@@ -108,17 +108,58 @@ describe('ProductsService', () => {
         service.create({ name: 'Coffee', sku: 'COF-2', price: 10, stock: 5 }),
       ).rejects.toBeInstanceOf(ConflictException);
     });
+  });
 
-    it('maps an optimistic-lock mismatch to a 409 Conflict', async () => {
-      productsRepository.findOne.mockResolvedValue(null);
-      productsRepository.create.mockReturnValue(product);
-      productsRepository.save.mockRejectedValue(
-        new OptimisticLockVersionMismatchError('products', 1, 2) as never,
-      );
+  describe('update (optimistic locking)', () => {
+    it('rejects a stale update with a 409 and never saves', async () => {
+      // The product was already changed (version bumped to 2) since the
+      // client read it (version 1): a stale stock/price edit must not win.
+      productsRepository.findOne.mockResolvedValue({
+        ...product,
+        stock: 7,
+        version: 2,
+      });
 
       await expect(
-        service.create({ name: 'Coffee', sku: 'COF-2', price: 10, stock: 5 }),
+        service.update('p1', { name: 'Renamed', stock: 10, version: 1 }),
       ).rejects.toBeInstanceOf(ConflictException);
+      expect(productsRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('applies the update when the version matches', async () => {
+      const found = { ...product, stock: 7, version: 2 } as Product;
+      productsRepository.findOne.mockResolvedValue(found);
+      productsRepository.merge.mockImplementation((target, source) =>
+        Object.assign(target, source),
+      );
+      productsRepository.save.mockResolvedValue(found);
+
+      const result = await service.update('p1', {
+        name: 'Renamed',
+        stock: 5,
+        version: 2,
+      });
+
+      expect(result).toMatchObject({ name: 'Renamed', stock: 5, version: 2 });
+      expect(productsRepository.merge).toHaveBeenCalledWith(
+        expect.objectContaining({ version: 2 }),
+        expect.not.objectContaining({ version: expect.anything() }),
+      );
+    });
+
+    it('never merges the submitted version onto the saved product', async () => {
+      const found = { ...product, version: 3 } as Product;
+      productsRepository.findOne.mockResolvedValue(found);
+      productsRepository.save.mockResolvedValue(found);
+
+      await service.update('p1', { isActive: false, version: 3 });
+
+      // The DTO carries the version for the check but it must not be merged
+      // as a caller-supplied column; the entity keeps its loaded version.
+      expect(productsRepository.merge).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.not.objectContaining({ version: expect.anything() }),
+      );
     });
   });
 

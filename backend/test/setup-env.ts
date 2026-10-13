@@ -4,7 +4,8 @@
  */
 process.env.NODE_ENV = 'test';
 process.env.PORT = '3100';
-process.env.DATABASE_URL = 'postgres://localhost:5432/inventory_test';
+process.env.DATABASE_URL =
+  process.env.TEST_DATABASE_URL ?? 'postgres://localhost:5432/inventory_test';
 process.env.DB_SYNCHRONIZE = 'false';
 process.env.DB_LOGGING = 'false';
 process.env.JWT_SECRET = 'e2e-test-secret-0123456789abcdef';

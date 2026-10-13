@@ -32,7 +32,13 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     const message = extractErrorMessage(error);
-    useUiStore.getState().pushToast('error', message);
+
+    // Only mutations toast globally. GET (query load) errors are rendered
+    // inline by each page, so toasting here too would double up feedback.
+    const method = (error.config?.method ?? '').toLowerCase();
+    if (method !== 'get' && method !== 'head') {
+      useUiStore.getState().pushToast('error', message);
+    }
 
     if (error.response?.status === 401 && useAuthStore.getState().token) {
       useAuthStore.getState().logout();

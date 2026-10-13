@@ -10,6 +10,7 @@ export interface AppConfig {
   jwtExpiresIn: string;
   corsOrigins: string[];
   reportingServiceUrl: string;
+  reportingToken: string;
   seedAdminEmail: string;
   seedAdminPassword: string;
 }
@@ -41,26 +42,43 @@ export const configValidationSchema = Joi.object({
   REPORTING_SERVICE_URL: Joi.string()
     .uri({ scheme: ['http', 'https'] })
     .default('http://localhost:8080'),
+  REPORTING_TOKEN: Joi.string().allow('').default(''),
   SEED_ADMIN_EMAIL: Joi.string().email().default('admin@example.com'),
   SEED_ADMIN_PASSWORD: Joi.string().min(8).default('Admin123!'),
 });
 
+/**
+ * Builds the app config through the single Joi schema, so defaults (seed
+ * credentials, ports, the reporting URL/token) are applied consistently for
+ * every entry point — including scripts like `seed.ts` that run outside the
+ * Nest DI container. This is the single source of truth for config: defaults
+ * live in Joi only and cannot drift from what the app actually uses.
+ */
 export function buildConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const { value, error } = configValidationSchema.validate(env, {
+    allowUnknown: true,
+    stripUnknown: true,
+  });
+
+  if (error) {
+    throw new Error(`Invalid environment configuration: ${error.message}`);
+  }
+
   return {
-    nodeEnv: env.NODE_ENV ?? 'development',
-    port: Number(env.PORT ?? 3000),
-    databaseUrl: env.DATABASE_URL as string,
-    dbSynchronize: env.DB_SYNCHRONIZE === 'true',
-    dbLogging: env.DB_LOGGING === 'true',
-    jwtSecret: env.JWT_SECRET as string,
-    jwtExpiresIn: env.JWT_EXPIRES_IN ?? '1d',
-    corsOrigins: (env.CORS_ORIGINS ?? 'http://localhost:5173')
-      .split(',')
-      .map((o) => o.trim())
+    nodeEnv: value.NODE_ENV,
+    port: value.PORT,
+    databaseUrl: value.DATABASE_URL,
+    dbSynchronize: value.DB_SYNCHRONIZE,
+    dbLogging: value.DB_LOGGING,
+    jwtSecret: value.JWT_SECRET,
+    jwtExpiresIn: value.JWT_EXPIRES_IN,
+    corsOrigins: value.CORS_ORIGINS.split(',')
+      .map((o: string) => o.trim())
       .filter(Boolean),
-    reportingServiceUrl: env.REPORTING_SERVICE_URL as string,
-    seedAdminEmail: env.SEED_ADMIN_EMAIL as string,
-    seedAdminPassword: env.SEED_ADMIN_PASSWORD as string,
+    reportingServiceUrl: value.REPORTING_SERVICE_URL,
+    reportingToken: value.REPORTING_TOKEN,
+    seedAdminEmail: value.SEED_ADMIN_EMAIL,
+    seedAdminPassword: value.SEED_ADMIN_PASSWORD,
   };
 }
 

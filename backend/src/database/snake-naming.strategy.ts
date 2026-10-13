@@ -7,8 +7,10 @@ import { snakeCase } from 'typeorm/util/StringUtils';
 
 /**
  * snake_case naming strategy for PostgreSQL, matching the manually authored
- * migration columns. TypeORM removed its built-in SnakeNamingStrategy in
- * recent 0.3.x releases, so we provide a minimal one here.
+ * migration columns. The commonly used SnakeNamingStrategy ships in the
+ * third-party `typeorm-naming-strategies` package; TypeORM itself only
+ * provides the camelCase DefaultNamingStrategy, so we implement the minimal
+ * snake_case behaviour here instead of adding a dependency.
  */
 export class SnakeNamingStrategy
   extends DefaultNamingStrategy

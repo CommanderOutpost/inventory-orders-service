@@ -51,4 +51,14 @@ export class UpdateProductDto {
   @ValidateIf((o) => o.isActive !== undefined)
   @IsBoolean()
   isActive?: boolean;
+
+  /**
+   * The product version the client read. Required: an update without it could
+   * silently clobber concurrent changes (e.g. sold stock), which is exactly
+   * what optimistic locking is meant to prevent.
+   */
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  version: number;
 }

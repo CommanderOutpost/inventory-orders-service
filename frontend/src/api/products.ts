@@ -17,6 +17,8 @@ export interface ProductInput {
   price: number;
   stock: number;
   isActive?: boolean;
+  /** Required for updates: the product version the client read. */
+  version?: number;
 }
 
 export const productsApi = {

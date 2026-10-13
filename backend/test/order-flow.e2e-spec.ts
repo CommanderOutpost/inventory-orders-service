@@ -68,7 +68,7 @@ describe('Inventory & Orders API (e2e)', () => {
   const createProduct = async (
     token: string,
     overrides: Record<string, unknown> = {},
-  ): Promise<{ id: string; stock: number; price: number }> => {
+  ): Promise<{ id: string; stock: number; price: number; version: number }> => {
     const res = await http
       .post('/api/v1/products')
       .set(authHeader(token))
@@ -99,6 +99,25 @@ describe('Inventory & Orders API (e2e)', () => {
         .post('/api/v1/auth/register')
         .send({ name: 'Jane', email: 'janedup1@test.com', password: 'Passw0rd' })
         .expect(409);
+    });
+
+    it('normalises email case and whitespace on registration and login', async () => {
+      await http
+        .post('/api/v1/auth/register')
+        .send({ name: 'Case', email: ' MiXeD@Test.CoM ', password: 'Passw0rd' })
+        .expect(201);
+
+      // The same mailbox under another case/whitespace cannot re-register.
+      await http
+        .post('/api/v1/auth/register')
+        .send({ name: 'Case', email: 'mixed@TEST.com', password: 'Passw0rd' })
+        .expect(409);
+
+      // Login resolves any case/whitespace variant to that account.
+      await http
+        .post('/api/v1/auth/login')
+        .send({ email: 'MIXED@test.com', password: 'Passw0rd' })
+        .expect(201);
     });
 
     it('rejects a wrong password', async () => {
@@ -138,6 +157,16 @@ describe('Inventory & Orders API (e2e)', () => {
         .expect(403);
     });
 
+    it('forbids admins from placing orders (customer-only)', async () => {
+      const adminToken = await loginAdmin();
+      const product = await createProduct(adminToken);
+      await http
+        .post('/api/v1/orders')
+        .set(authHeader(adminToken))
+        .send({ items: [{ productId: product.id, quantity: 1 }] })
+        .expect(403);
+    });
+
     it('forbids customers from the reports endpoint', async () => {
       const customerRes = await register('rbac2');
       await http
@@ -160,16 +189,71 @@ describe('Inventory & Orders API (e2e)', () => {
       const token = await loginAdmin();
       const product = await createProduct(token);
 
+      // Updates require the version the client read (optimistic locking).
       const updated = await http
         .patch(`/api/v1/products/${product.id}`)
         .set(authHeader(token))
-        .send({ price: 14.0, stock: 5 })
+        .send({ price: 14.0, stock: 5, version: product.version })
         .expect(200);
       expect(updated.body.price).toBe(14);
       expect(updated.body.stock).toBe(5);
+      expect(updated.body.version).toBe(product.version + 1);
 
       const listed = await http.get('/api/v1/products').expect(200);
       expect(listed.body.meta.total).toBeGreaterThanOrEqual(1);
+    });
+
+    it('rejects an update that omits the version', async () => {
+      const token = await loginAdmin();
+      const product = await createProduct(token);
+      await http
+        .patch(`/api/v1/products/${product.id}`)
+        .set(authHeader(token))
+        .send({ price: 99 })
+        .expect(400);
+    });
+
+    it('rejects a stale admin edit (409) instead of overwriting sold stock', async () => {
+      const adminToken = await loginAdmin();
+      const product = await createProduct(adminToken, { stock: 10 });
+
+      // Admin opens the edit form: reads version 1, stock 10.
+      const opened = await http
+        .get(`/api/v1/products/${product.id}`)
+        .expect(200);
+
+      // Meanwhile a customer orders 3 units → stock 7, version bumped.
+      const customerRes = await register('stale1');
+      await http
+        .post('/api/v1/orders')
+        .set(authHeader(customerRes.body.accessToken))
+        .send({ items: [{ productId: product.id, quantity: 3 }] })
+        .expect(201);
+
+      // The admin submits the stale form (old version, old stock): 409.
+      await http
+        .patch(`/api/v1/products/${product.id}`)
+        .set(authHeader(adminToken))
+        .send({ name: 'Renamed', stock: 10, version: opened.body.version })
+        .expect(409);
+
+      // Very important: sold stock was NOT silently restored.
+      const after = await http
+        .get(`/api/v1/products/${product.id}`)
+        .expect(200);
+      expect(after.body.stock).toBe(7);
+
+      // A fresh edit with the latest version succeeds.
+      await http
+        .patch(`/api/v1/products/${product.id}`)
+        .set(authHeader(adminToken))
+        .send({ name: 'Renamed', stock: 4, version: after.body.version })
+        .expect(200);
+      const renamed = await http
+        .get(`/api/v1/products/${product.id}`)
+        .expect(200);
+      expect(renamed.body.name).toBe('Renamed');
+      expect(renamed.body.stock).toBe(4);
     });
 
     it('rejects duplicate SKUs', async () => {

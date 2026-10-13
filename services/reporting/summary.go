@@ -40,15 +40,29 @@ type OrderSummary struct {
 
 // GetSummary aggregates order data for the requested period.
 // Cancelled orders are excluded from revenue and sales metrics but are
-// still broken down in OrdersByStatus.
+// still broken down in OrdersByStatus. All three aggregation queries run
+// inside one read-only repeatable-read transaction so they observe the same
+// snapshot of the data.
 func (s *OrderStore) GetSummary(ctx context.Context, from, to string) (OrderSummary, error) {
 	var summary OrderSummary
+	// Always expose arrays (never null) so API consumers can call .length.
+	summary.OrdersByStatus = []StatusCount{}
+	summary.TopProducts = []TopProduct{}
 
 	ctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
 
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return summary, err
+	}
+	defer tx.Rollback() //nolint:errcheck // read-only; rollback is discard
+
 	// Overall figures.
-	row := s.db.QueryRowContext(ctx, `
+	row := tx.QueryRowContext(ctx, `
 		SELECT
 			COUNT(*) FILTER (WHERE status <> 'cancelled') AS total_orders,
 			COALESCE(SUM(total_amount) FILTER (WHERE status <> 'cancelled'), 0) AS total_revenue,
@@ -56,19 +70,19 @@ func (s *OrderStore) GetSummary(ctx context.Context, from, to string) (OrderSumm
 		FROM orders
 		WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
 		  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)`,
-		nullableDate(from), nullableDate(to),
+		nullableDate(from), nullableDate(toUpperBound(to)),
 	)
 	if err := row.Scan(&summary.TotalOrders, &summary.TotalRevenue, &summary.AverageOrderValue); err != nil {
 		return summary, err
 	}
 
 	// Status breakdown (all orders, including cancelled).
-	statusRows, err := s.db.QueryContext(ctx, `
+	statusRows, err := tx.QueryContext(ctx, `
 		SELECT status, COUNT(*) FROM orders
 		WHERE ($1::timestamptz IS NULL OR created_at >= $1::timestamptz)
 		  AND ($2::timestamptz IS NULL OR created_at <= $2::timestamptz)
 		GROUP BY status ORDER BY status`,
-		nullableDate(from), nullableDate(to),
+		nullableDate(from), nullableDate(toUpperBound(to)),
 	)
 	if err != nil {
 		return summary, err
@@ -87,7 +101,7 @@ func (s *OrderStore) GetSummary(ctx context.Context, from, to string) (OrderSumm
 	}
 
 	// Top selling products by revenue.
-	productRows, err := s.db.QueryContext(ctx, `
+	productRows, err := tx.QueryContext(ctx, `
 		SELECT p.id, p.name, p.sku,
 		       SUM(oi.quantity)::bigint AS quantity_sold,
 		       SUM(oi.line_total)::float8 AS revenue
@@ -100,7 +114,7 @@ func (s *OrderStore) GetSummary(ctx context.Context, from, to string) (OrderSumm
 		GROUP BY p.id, p.name, p.sku
 		ORDER BY revenue DESC
 		LIMIT 10`,
-		nullableDate(from), nullableDate(to),
+		nullableDate(from), nullableDate(toUpperBound(to)),
 	)
 	if err != nil {
 		return summary, err
@@ -126,12 +140,25 @@ func (s *OrderStore) GetSummary(ctx context.Context, from, to string) (OrderSumm
 }
 
 // nullableDate converts an empty string to nil so SQL can use the
-// `IS NULL` branch (i.e. no upper/lower bound).
+// `IS NULL` branch (i.e. no lower bound).
 func nullableDate(value string) any {
 	if value == "" {
 		return nil
 	}
 	return value
+}
+
+// toUpperBound makes a date-only `to` value (YYYY-MM-DD) inclusive of that
+// whole day by shifting the upper bound to the end of the day in UTC. Full
+// timestamps pass through unchanged, so `<=` keeps its exact semantics.
+func toUpperBound(to string) string {
+	if to == "" {
+		return ""
+	}
+	if t, err := time.Parse("2006-01-02", to); err == nil {
+		return t.AddDate(0, 0, 1).Add(-time.Nanosecond).Format(time.RFC3339Nano)
+	}
+	return to
 }
 
 type SummaryHandler struct {

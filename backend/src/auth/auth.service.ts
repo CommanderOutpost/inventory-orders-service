@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { UsersService } from '../users/users.service';
@@ -94,7 +95,7 @@ export class AuthService {
         { sub: user.id, email: user.email, role: user.role, name: user.name },
         {
           secret: config.jwtSecret,
-          expiresIn: config.jwtExpiresIn as unknown as number,
+          expiresIn: config.jwtExpiresIn as JwtSignOptions['expiresIn'],
         },
       ),
     };

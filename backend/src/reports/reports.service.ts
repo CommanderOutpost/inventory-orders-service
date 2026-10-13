@@ -12,9 +12,12 @@ const REQUEST_TIMEOUT_MS = 5_000;
 @Injectable()
 export class ReportsService {
   private readonly baseUrl: string;
+  private readonly reportingToken: string;
 
   constructor(configService: ConfigService) {
-    this.baseUrl = configService.getOrThrow<AppConfig>('app').reportingServiceUrl;
+    const config = configService.getOrThrow<AppConfig>('app');
+    this.baseUrl = config.reportingServiceUrl;
+    this.reportingToken = config.reportingToken;
   }
 
   /**
@@ -34,10 +37,17 @@ export class ReportsService {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+    // The reporting service is authenticated with the shared internal token
+    // (empty in local dev where it trusts the loopback interface).
+    const headers: Record<string, string> = { accept: 'application/json' };
+    if (this.reportingToken) {
+      headers.authorization = `Bearer ${this.reportingToken}`;
+    }
+
     try {
       const response = await fetch(url, {
         signal: controller.signal,
-        headers: { accept: 'application/json' },
+        headers,
       });
 
       if (!response.ok) {

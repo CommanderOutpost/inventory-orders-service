@@ -29,6 +29,57 @@ func TestIsSupportedDate(t *testing.T) {
 	}
 }
 
+func TestToUpperBound(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		// Date-only upper bounds become inclusive of the whole day (end of
+		// that day in UTC).
+		{"2026-10-13", "2026-10-13T23:59:59.999999999Z"},
+		// Full timestamps pass through unchanged.
+		{"2026-10-13T12:30:00Z", "2026-10-13T12:30:00Z"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := toUpperBound(tc.input); got != tc.want {
+			t.Errorf("toUpperBound(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestRequireToken(t *testing.T) {
+	unauth := requireToken("secret")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/summary/orders", nil)
+	res := httptest.NewRecorder()
+	unauth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(res, req)
+	if res.Code != http.StatusUnauthorized {
+		t.Errorf("no token: status = %d, want 401", res.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/summary/orders", nil)
+	req.Header.Set("Authorization", "Bearer secret")
+	res = httptest.NewRecorder()
+	unauth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Errorf("valid token: status = %d, want 200", res.Code)
+	}
+
+	open := requireToken("")
+	req = httptest.NewRequest(http.MethodGet, "/health", nil)
+	res = httptest.NewRecorder()
+	open(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Errorf("no token configured: status = %d, want 200", res.Code)
+	}
+}
+
 // Query validation runs before any database access, so these cases are
 // deterministic and do not require a running Postgres instance.
 func TestOrderSummaryRejectsInvalidParams(t *testing.T) {

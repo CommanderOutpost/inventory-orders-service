@@ -20,8 +20,10 @@ services:
     environment:
       PORT: "8080"
       DATABASE_URL: postgres://postgres:postgres@db:5432/inventory
-    ports:
-      - "8080:8080"
+      # Shared internal token so the reporting API is admin-only. Not
+      # published to the host; only the backend reaches it on the Docker
+      # network.
+      REPORTING_TOKEN: ${REPORTING_TOKEN:-reporting-internal-token}
     depends_on:
       db:
         condition: service_healthy
@@ -38,6 +40,9 @@ services:
       JWT_EXPIRES_IN: 1d
       CORS_ORIGINS: http://localhost:5173,http://localhost
       REPORTING_SERVICE_URL: http://reporting:8080
+      REPORTING_TOKEN: ${REPORTING_TOKEN:-reporting-internal-token}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@example.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin123!}
     ports:
       - "3000:3000"
     depends_on:

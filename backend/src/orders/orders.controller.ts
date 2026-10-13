@@ -27,6 +27,7 @@ import { UserRole } from '../users/user-role.enum';
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
+  @Roles(UserRole.CUSTOMER)
   @Post()
   create(
     @CurrentUser() user: AuthUser,

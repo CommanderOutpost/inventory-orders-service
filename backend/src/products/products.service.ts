@@ -84,7 +84,19 @@ export class ProductsService {
       await this.assertSkuAvailable(dto.sku, id);
     }
 
-    this.productsRepository.merge(product, dto);
+    // Optimistic locking: the client must submit the version it read. If the
+    // product changed since then (e.g. a customer order decremented stock),
+    // this edit is a stale overwrite and is rejected instead of silently
+    // restoring sold stock. The version itself is never merged onto the
+    // freshly loaded entity.
+    if (dto.version !== product.version) {
+      throw new ConflictException(
+        'This product was modified by someone else. Refresh and try again.',
+      );
+    }
+
+    const { version: _ignored, ...changes } = dto;
+    this.productsRepository.merge(product, changes);
     return this.saveWithWriteGuard(product);
   }
 
